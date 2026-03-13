@@ -1,0 +1,149 @@
+@startuml
+title UC-1.4 Upload Related Documents (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Applicant Student" as Student
+participant "documentsPage : UploadDocumentsPage" as Page
+participant "documentsView : UploadDocumentsView" as View
+participant "documentApiClient : DocumentApiClient" as ApiClient
+participant "documentCtrl : DocumentController" as Controller
+participant "documentAppService : DocumentApplicationService" as AppService
+participant "documentDomainService : DocumentDomainService" as DomainService
+participant "documentValidationService : DocumentValidationService" as ValidationService
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "documentRepo : DocumentRepository" as DocumentRepo
+participant "storageService : StorageService" as StorageService
+participant "statusService : StatusApplicationService" as StatusService
+database "db : PostgreSQL" as DB
+collections "minio : MinIO Object Storage" as MinIO
+
+== Step 1: Open Upload Documents Page ==
+Student -> Page: 1. navigateToUploadDocuments()
+activate Page
+Page -> View: 1.1 renderUploadDocumentsPage()
+activate View
+View --> Student: 1.2 display required/optional document list
+deactivate View
+deactivate Page
+
+== Step 2: Upload File ==
+Student -> View: 2. selectDocument(file, fileType)
+activate View
+
+alt [UC-1.4.EX.1 Invalid File Format]
+    View --> Student: 2.1 display "Unsupported file format. Please upload PDF or JPG."
+
+else [UC-1.4.EX.2 File Too Large]
+    View --> Student: 2.2 display "File size is too large. Maximum allowed size exceeded."
+
+else [Valid File]
+    View -> ApiClient: 2.3 uploadDocument(file, fileType, applicationId)
+    activate ApiClient
+
+    ApiClient -> Controller: 2.4 POST /documents/upload
+    activate Controller
+
+    Controller -> AppService: 2.5 uploadDocument(file, fileType, applicationId)
+    activate AppService
+
+    AppService -> DomainService: 2.6 validateAndStore(file, fileType, applicationId)
+    activate DomainService
+
+    DomainService -> ValidationService: 2.7 validateDocument(file, fileType)
+    activate ValidationService
+    ValidationService --> DomainService: 2.8 validationResult
+    deactivate ValidationService
+
+    alt [Validation Failed]
+        DomainService --> AppService: 2.9 throw DocumentValidationException
+        AppService --> Controller: 2.10 error response
+        Controller --> ApiClient: 2.11 HTTP 400 Bad Request
+        ApiClient --> View: 2.12 return validation error
+        View --> Student: 2.13 display validation message
+
+    else [Validation Passed]
+        DomainService -> AppRepo: 2.14 findById(applicationId)
+        activate AppRepo
+        AppRepo -> DB: 2.15 query application
+        activate DB
+        DB --> AppRepo: 2.16 application found
+        deactivate DB
+        AppRepo --> DomainService: 2.17 application
+        deactivate AppRepo
+
+        DomainService -> StorageService: 2.18 storeFile(file)
+        activate StorageService
+        StorageService -> MinIO: 2.19 upload object
+        activate MinIO
+        MinIO --> StorageService: 2.20 storageKey
+        deactivate MinIO
+        StorageService --> DomainService: 2.21 return storageKey
+        deactivate StorageService
+
+        DomainService -> DocumentRepo: 2.22 save(documentMetadata)
+        activate DocumentRepo
+        DocumentRepo -> DB: 2.23 insert document record
+        activate DB
+        DB --> DocumentRepo: 2.24 insert success
+        deactivate DB
+        DocumentRepo --> DomainService: 2.25 saved document
+        deactivate DocumentRepo
+
+        DomainService --> AppService: 2.26 upload success
+        deactivate DomainService
+
+        AppService --> Controller: 2.27 DocumentResponse
+        deactivate AppService
+
+        Controller --> ApiClient: 2.28 HTTP 201 Created
+        deactivate Controller
+
+        ApiClient --> View: 2.29 return upload success
+        deactivate ApiClient
+
+        View --> Student: 2.30 display "Document uploaded successfully"
+    end
+end
+
+== Step 3: Submit All Uploaded Documents ==
+Student -> View: 3. submitAllDocuments()
+activate View
+
+View -> ApiClient: 3.1 finalizeDocumentSubmission(applicationId)
+activate ApiClient
+
+ApiClient -> Controller: 3.2 PATCH /documents/finalize-submission
+activate Controller
+
+Controller -> AppService: 3.3 finalizeSubmission(applicationId)
+activate AppService
+
+AppService -> AppRepo: 3.4 findById(applicationId)
+activate AppRepo
+AppRepo -> DB: 3.5 query application
+activate DB
+DB --> AppRepo: 3.6 application
+deactivate DB
+AppRepo --> AppService: 3.7 application
+deactivate AppRepo
+
+AppService -> StatusService: 3.8 updateStatus(applicationId, SUBMITTED)
+activate StatusService
+StatusService -> DB: 3.9 insert/update status
+activate DB
+DB --> StatusService: 3.10 update success
+deactivate DB
+StatusService --> AppService: 3.11 status updated
+deactivate StatusService
+
+AppService --> Controller: 3.12 submission finalized
+deactivate AppService
+
+Controller --> ApiClient: 3.13 HTTP 200 OK
+deactivate Controller
+
+ApiClient --> View: 3.14 return success
+deactivate ApiClient
+
+View --> Student: 3.15 display "Documents submitted successfully"
+deactivate View
+@enduml

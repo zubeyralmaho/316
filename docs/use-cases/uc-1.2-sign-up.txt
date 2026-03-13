@@ -1,0 +1,103 @@
+@startuml
+title UC-1.2 Sign Up (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Applicant Student" as Student
+participant "signUpPage : SignUpPage" as Page
+participant "signUpView : SignUpView" as View
+participant "authApiClient : AuthApiClient" as ApiClient
+participant "authCtrl : AuthController" as Controller
+participant "authAppService : AuthApplicationService" as AppService
+participant "authDomainService : AuthDomainService" as DomainService
+participant "userRepo : UserRepository" as UserRepo
+participant "notificationService : EmailNotificationService" as EmailService
+database "db : PostgreSQL" as DB
+participant "loginPage : LoginPage" as LoginPage
+
+== Step 1: Open Sign Up Page ==
+Student -> Page: 1. navigateToSignUp()
+activate Page
+Page -> View: 1.1 renderRegistrationForm()
+activate View
+View --> Student: 1.2 display registration form
+deactivate View
+deactivate Page
+
+== Step 2: Submit Registration Form ==
+Student -> View: 2. submitRegistrationForm(personalInfo, password, consent)
+activate View
+
+alt [UC-1.2.EX.1 Missing or Invalid Fields]
+    View --> Student: 2.1 display validation errors
+
+else [Fields are valid]
+    View -> ApiClient: 2.2 postRegister(registrationData)
+    activate ApiClient
+
+    ApiClient -> Controller: 2.3 POST /auth/register
+    activate Controller
+
+    Controller -> AppService: 2.4 register(registrationData)
+    activate AppService
+
+    AppService -> DomainService: 2.5 validateAndCreateUser(registrationData)
+    activate DomainService
+
+    DomainService -> UserRepo: 2.6 existsByEmail(email)
+    activate UserRepo
+    UserRepo -> DB: 2.7 query by email
+    activate DB
+    DB --> UserRepo: 2.8 exists / not exists
+    deactivate DB
+    UserRepo --> DomainService: 2.9 exists / not exists
+    deactivate UserRepo
+
+    alt [UC-1.2.EX.2 Email Already Exists]
+        DomainService --> AppService: 2.10 throw EmailAlreadyExistsException
+        AppService --> Controller: 2.11 error response
+        Controller --> ApiClient: 2.12 HTTP 409 Conflict
+        ApiClient --> View: 2.13 return error
+        View --> Student: 2.14 display "This email is already in use"
+
+    else [UC-1.2.EX.3 KVKK Consent Not Given]
+        DomainService --> AppService: 2.15 throw ConsentRequiredException
+        AppService --> Controller: 2.16 error response
+        Controller --> ApiClient: 2.17 HTTP 400 Bad Request
+        ApiClient --> View: 2.18 return error
+        View --> Student: 2.19 display "You must accept the KVKK/privacy terms"
+
+    else [Normal Course]
+        DomainService -> UserRepo: 2.20 save(newUser)
+        activate UserRepo
+        UserRepo -> DB: 2.21 insert user
+        activate DB
+        DB --> UserRepo: 2.22 insert success
+        deactivate DB
+        UserRepo --> DomainService: 2.23 saved user
+        deactivate UserRepo
+
+        DomainService -> EmailService: 2.24 sendVerificationEmail(email, verificationLink)
+        activate EmailService
+        EmailService --> DomainService: 2.25 email queued/sent
+        deactivate EmailService
+
+        DomainService --> AppService: 2.26 registrationSuccess(user)
+        deactivate DomainService
+
+        AppService --> Controller: 2.27 RegisterResponse(success message)
+        deactivate AppService
+
+        Controller --> ApiClient: 2.28 HTTP 201 Created
+        deactivate Controller
+
+        ApiClient --> View: 2.29 return success response
+        deactivate ApiClient
+
+        == Step 3: Redirect to Login ==
+        View -> LoginPage: 3.1 redirectToLogin()
+        activate LoginPage
+        LoginPage --> Student: 3.2 display login page
+        deactivate LoginPage
+        deactivate View
+    end
+end
+@enduml

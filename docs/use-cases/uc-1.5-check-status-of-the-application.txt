@@ -1,0 +1,120 @@
+@startuml
+title UC-1.5 Check Status of the Application (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Applicant Student" as Student
+participant "statusPage : ApplicationStatusPage" as Page
+participant "statusView : ApplicationStatusView" as View
+participant "statusApiClient : StatusApiClient" as ApiClient
+participant "statusCtrl : StatusController" as Controller
+participant "statusAppService : StatusApplicationService" as AppService
+participant "statusDomainService : StatusDomainService" as DomainService
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "statusRepo : StatusRepository" as StatusRepo
+database "db : PostgreSQL" as DB
+
+== Step 1: Open Status Page ==
+Student -> Page: 1. navigateToApplicationStatus()
+activate Page
+Page -> View: 1.1 renderStatusPage()
+activate View
+View --> Student: 1.2 display loading state
+
+== Step 2: Request Current Status ==
+View -> ApiClient: 2. getMyApplicationStatus()
+activate ApiClient
+
+ApiClient -> Controller: 2.1 GET /statuses/me
+activate Controller
+
+Controller -> AppService: 2.2 getCurrentApplicationStatus()
+activate AppService
+
+AppService -> DomainService: 2.3 resolveCurrentStudentApplication()
+activate DomainService
+
+DomainService -> AppRepo: 2.4 findLatestApplicationByCurrentUser()
+activate AppRepo
+AppRepo -> DB: 2.5 query application by current user
+activate DB
+DB --> AppRepo: 2.6 application / none
+deactivate DB
+AppRepo --> DomainService: 2.7 application / none
+deactivate AppRepo
+
+alt [UC-1.5.ALT.1 No Active Application]
+    DomainService --> AppService: 2.8 no active application
+    AppService --> Controller: 2.9 empty response
+    Controller --> ApiClient: 2.10 HTTP 404 / empty state
+    ApiClient --> View: 2.11 return no application state
+    View --> Student: 2.12 display "No active transfer application found"
+
+else [Application Exists]
+    DomainService -> StatusRepo: 2.13 findCurrentStatus(applicationId)
+    activate StatusRepo
+    StatusRepo -> DB: 2.14 query current application status
+    activate DB
+    DB --> StatusRepo: 2.15 current status
+    deactivate DB
+    StatusRepo --> DomainService: 2.16 current status
+    deactivate StatusRepo
+
+    DomainService --> AppService: 2.17 status details
+    deactivate DomainService
+
+    AppService --> Controller: 2.18 ApplicationStatusResponse
+    deactivate AppService
+
+    Controller --> ApiClient: 2.19 HTTP 200 OK
+    deactivate Controller
+
+    ApiClient --> View: 2.20 return status response
+    deactivate ApiClient
+
+    == Step 3: Render Status ==
+    View --> Student: 3.1 display current status
+    View --> Student: 3.2 display last update time
+    View --> Student: 3.3 display pending actions (if any)
+end
+
+== Optional Step 4: Load Status History ==
+opt [Student wants to see detailed history]
+    View -> ApiClient: 4. loadStatusHistory(applicationId)
+    activate ApiClient
+
+    ApiClient -> Controller: 4.1 GET /statuses/{applicationId}/history
+    activate Controller
+
+    Controller -> AppService: 4.2 getStatusHistory(applicationId)
+    activate AppService
+
+    AppService -> StatusRepo: 4.3 findStatusHistory(applicationId)
+    activate StatusRepo
+    StatusRepo -> DB: 4.4 query status history
+    activate DB
+    DB --> StatusRepo: 4.5 status history list
+    deactivate DB
+    StatusRepo --> AppService: 4.6 history list
+    deactivate StatusRepo
+
+    AppService --> Controller: 4.7 StatusHistoryResponse
+    deactivate AppService
+
+    Controller --> ApiClient: 4.8 HTTP 200 OK
+    deactivate Controller
+
+    ApiClient --> View: 4.9 return history response
+    deactivate ApiClient
+
+    View --> Student: 4.10 display status timeline/history
+end
+
+== Exception Flow ==
+alt [UC-1.5.EX.1 Status Service Unavailable]
+    Controller --> ApiClient: E1 HTTP 503 Service Unavailable
+    ApiClient --> View: E2 return service error
+    View --> Student: E3 display "Application status cannot be retrieved at the moment. Please try again later."
+end
+
+deactivate View
+deactivate Page
+@enduml

@@ -1,0 +1,105 @@
+@startuml
+title UC-1.1 Student Login (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Applicant Student" as Student
+participant "loginPage : LoginPage" as Page
+participant "loginView : LoginView" as View
+participant "authApiClient : AuthApiClient" as ApiClient
+participant "authCtrl : AuthController" as Controller
+participant "authAppService : AuthApplicationService" as AppService
+participant "authDomainService : AuthDomainService" as DomainService
+participant "userRepo : UserRepository" as UserRepo
+participant "jwtService : JwtService" as JwtService
+database "db : PostgreSQL" as DB
+participant "dashboardPage : StudentDashboardPage" as Dashboard
+
+== Step 1: Open Login Page ==
+Student -> Page: 1. navigateToLogin()
+activate Page
+Page -> View: 1.1 renderLoginForm()
+activate View
+View --> Student: 1.2 display login form
+deactivate View
+deactivate Page
+
+== Step 2: User Action ==
+alt [UC-1.1.ALT.1 Forgot Password]
+    Student -> View: click "Forgot Password"
+    activate View
+    View --> Student: redirect to Password Reset Page (UC-1.3)
+    deactivate View
+
+else [Submit Credentials]
+    Student -> View: 2. submitCredentials(email, password)
+    activate View
+
+    alt [UC-1.1.EX.1 Empty Fields]
+        View --> Student: 2.1 display "Please fill in all required fields."
+
+    else [Fields are valid]
+        View -> ApiClient: 2.2 postLogin(email, password)
+        activate ApiClient
+
+        ApiClient -> Controller: 2.3 POST /auth/login
+        activate Controller
+
+        Controller -> AppService: 2.4 login(email, password)
+        activate AppService
+
+        AppService -> DomainService: 2.5 authenticate(email, password)
+        activate DomainService
+
+        DomainService -> UserRepo: 2.6 findByEmail(email)
+        activate UserRepo
+        UserRepo -> DB: 2.7 query user by email
+        activate DB
+        DB --> UserRepo: 2.8 user data / null
+        deactivate DB
+        UserRepo --> DomainService: 2.9 user / null
+        deactivate UserRepo
+
+        alt [UC-1.1.EX.2 Invalid Credentials]
+            DomainService --> AppService: 2.10 throw InvalidCredentialsException
+            AppService --> Controller: 2.11 error response
+            Controller --> ApiClient: 2.12 HTTP 401 Unauthorized
+            ApiClient --> View: 2.13 return error
+            View --> Student: 2.14 display "Invalid email or password"
+
+        else [UC-1.1.EX.3 Account Locked]
+            DomainService --> AppService: 2.15 throw AccountLockedException
+            AppService --> Controller: 2.16 error response
+            Controller --> ApiClient: 2.17 HTTP 423 Locked
+            ApiClient --> View: 2.18 return error
+            View --> Student: 2.19 display "Your account is locked. Please contact support."
+
+        else [Valid Credentials]
+            DomainService -> JwtService: 2.20 generateToken(userId, role)
+            activate JwtService
+            JwtService --> DomainService: 2.21 jwtToken
+            deactivate JwtService
+
+            DomainService --> AppService: 2.22 authenticationSuccess(user, token)
+            deactivate DomainService
+
+            AppService --> Controller: 2.23 LoginResponse(token, userInfo)
+            deactivate AppService
+
+            Controller --> ApiClient: 2.24 HTTP 200 OK + LoginResponse
+            deactivate Controller
+
+            ApiClient --> View: 2.25 return success(token, userInfo)
+            deactivate ApiClient
+
+            == Step 3: Redirect to Dashboard ==
+            View -> Page: 3.1 store token and trigger redirect
+            deactivate View
+            activate Page
+            Page -> Dashboard: 3.2 navigateToDashboard()
+            activate Dashboard
+            Dashboard --> Student: 3.3 display Student Dashboard
+            deactivate Dashboard
+            deactivate Page
+        end
+    end
+end
+@enduml
