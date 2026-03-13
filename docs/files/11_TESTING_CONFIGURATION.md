@@ -442,8 +442,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['antd'],
+          vendor: ['react', 'react-dom'],
+          ui: ['lucide-react', 'framer-motion'],
         },
       },
     },

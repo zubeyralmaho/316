@@ -1,0 +1,68 @@
+@startuml
+title Staff Login (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Administrative Staff" as Staff
+participant "loginPage : StaffLoginPage" as Page
+participant "loginView : StaffLoginView" as View
+participant "authApiClient : AuthApiClient" as ApiClient
+participant "authCtrl : AuthController" as Controller
+participant "authAppService : AuthApplicationService" as AppService
+participant "authDomainService : AuthDomainService" as DomainService
+participant "userRepo : UserRepository" as UserRepo
+participant "jwtService : JwtService" as JwtService
+database "db : PostgreSQL" as DB
+participant "dashboardPage : StaffDashboardPage" as Dashboard
+
+Staff -> Page: navigateToStaffLogin()
+activate Page
+Page -> View: renderLoginForm()
+activate View
+View --> Staff: display staff login form
+
+Staff -> View: submitCredentials(email, password)
+View -> ApiClient: postStaffLogin(email, password)
+activate ApiClient
+ApiClient -> Controller: POST /auth/staff/login
+activate Controller
+Controller -> AppService: loginStaff(email, password)
+activate AppService
+AppService -> DomainService: authenticateStaff(email, password)
+activate DomainService
+DomainService -> UserRepo: findByEmail(email)
+activate UserRepo
+UserRepo -> DB: query staff user
+activate DB
+DB --> UserRepo: user / null
+deactivate DB
+UserRepo --> DomainService: user / null
+deactivate UserRepo
+
+alt [Invalid Credentials or Unauthorized Role]
+    DomainService --> AppService: throw AuthenticationException
+    AppService --> Controller: error response
+    Controller --> ApiClient: HTTP 401 Unauthorized
+    ApiClient --> View: return error
+    View --> Staff: display authentication error
+
+else [Valid Staff Login]
+    DomainService -> JwtService: generateToken(userId, role)
+    activate JwtService
+    JwtService --> DomainService: jwtToken
+    deactivate JwtService
+    DomainService --> AppService: authenticationSuccess
+    deactivate DomainService
+    AppService --> Controller: LoginResponse
+    deactivate AppService
+    Controller --> ApiClient: HTTP 200 OK
+    deactivate Controller
+    ApiClient --> View: return success
+    deactivate ApiClient
+    View -> Dashboard: redirectToStaffDashboard()
+    activate Dashboard
+    Dashboard --> Staff: display staff dashboard
+    deactivate Dashboard
+end
+
+deactivate View
+deactivate Page
+@enduml

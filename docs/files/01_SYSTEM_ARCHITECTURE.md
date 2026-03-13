@@ -28,7 +28,7 @@ UTMS follows a **Monolithic Architecture** with a layered design pattern. This a
 │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
 │   │   Student   │  │    OIDB     │  │   Dean's    │  │    YGK      │       │
 │   │   Portal    │  │   Portal    │  │   Portal    │  │   Portal    │       │
-│   │  (React.js) │  │  (React.js) │  │  (React.js) │  │  (React.js) │       │
+│   │  (Next.js) │  │  (Next.js) │  │  (Next.js) │  │  (Next.js) │       │
 │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘       │
 │          │                │                │                │               │
 │          └────────────────┴────────────────┴────────────────┘               │
@@ -131,15 +131,15 @@ UTMS follows a **Monolithic Architecture** with a layered design pattern. This a
 
 | Component | Technology | Version | Purpose |
 |-----------|------------|---------|---------|
-| Framework | React.js | 18.x | UI framework |
+| Framework | Next.js | 14.x | React Framework (App Router) |
 | Language | TypeScript | 5.x | Type-safe JavaScript |
 | Routing | React Router | 6.x | Client-side routing |
 | State | Zustand | 4.x | State management |
 | HTTP Client | Axios | 1.x | API communication |
-| UI Components | Ant Design | 5.x | Component library |
+| UI Components | Shadcn UI | latest | Accessible components |
 | Forms | React Hook Form | 7.x | Form management |
 | Validation | Zod | 3.x | Schema validation |
-| Build Tool | Vite | 5.x | Build & dev server |
+| Build Tool | Next.js | 14.x | Build & dev server |
 | Testing | Vitest + RTL | - | Unit & component testing |
 
 ### 3.3 Database & Storage
@@ -381,18 +381,34 @@ src/main/java/com/iztech/utms/
 
 ```
 src/
-├── main.tsx                             # Application entry point
-├── App.tsx                              # Root component
-├── vite-env.d.ts                        # Vite types
-│
-├── api/                                 # API layer
-│   ├── client.ts                        # Axios instance
-│   ├── auth.api.ts
-│   ├── application.api.ts
-│   ├── document.api.ts
-│   ├── evaluation.api.ts
-│   ├── notification.api.ts
-│   └── admin.api.ts
+├── app/                                 # Next.js App Router
+│   ├── layout.tsx                       # Root layout
+│   ├── page.tsx                         # Landing page
+│   ├── globals.css                      # Global styles
+│   │
+│   ├── (auth)/                          # Route group for auth
+│   │   ├── login/page.tsx
+│   │   ├── register/page.tsx
+│   │   └── reset-password/page.tsx
+│   │
+│   ├── (dashboard)/                     # Route group for dashboard layouts
+│       ├── student/
+│       │   ├── layout.tsx
+│       │   ├── page.tsx                 # Student dashboard
+│       │   ├── applications/page.tsx
+│       │   └── documents/page.tsx
+│       │
+│       ├── staff/
+│       │   ├── layout.tsx
+│       │   ├── page.tsx
+│       │   ├── applications/page.tsx
+│       │   └── intibak/page.tsx
+│       │
+│       └── admin/
+│           ├── layout.tsx
+│           ├── page.tsx
+│           ├── users/page.tsx
+│           └── settings/page.tsx
 │
 ├── components/                          # Reusable components
 │   ├── common/
@@ -444,36 +460,6 @@ src/
 │       ├── NotificationList/
 │       └── NotificationItem/
 │
-├── pages/                               # Page components
-│   ├── auth/
-│   │   ├── LoginPage.tsx
-│   │   ├── RegisterPage.tsx
-│   │   └── ResetPasswordPage.tsx
-│   │
-│   ├── student/
-│   │   ├── DashboardPage.tsx
-│   │   ├── NewApplicationPage.tsx
-│   │   ├── ApplicationStatusPage.tsx
-│   │   └── DocumentsPage.tsx
-│   │
-│   ├── staff/
-│   │   ├── DashboardPage.tsx
-│   │   ├── ApplicationListPage.tsx
-│   │   ├── ApplicationDetailPage.tsx
-│   │   ├── DocumentReviewPage.tsx
-│   │   └── IntibakPage.tsx
-│   │
-│   ├── admin/
-│   │   ├── DashboardPage.tsx
-│   │   ├── UsersPage.tsx
-│   │   ├── DepartmentsPage.tsx
-│   │   ├── ReportsPage.tsx
-│   │   └── SettingsPage.tsx
-│   │
-│   └── error/
-│       ├── NotFoundPage.tsx
-│       └── ErrorPage.tsx
-│
 ├── hooks/                               # Custom hooks
 │   ├── useAuth.ts
 │   ├── useApplication.ts
@@ -503,16 +489,8 @@ src/
 │   ├── storage.ts
 │   └── helpers.ts
 │
-├── routes/                              # Routing
-│   ├── index.tsx
-│   ├── PrivateRoute.tsx
-│   ├── RoleRoute.tsx
-│   └── routes.config.ts
-│
 └── styles/                              # Global styles
-    ├── global.css
-    ├── variables.css
-    └── antd-overrides.css
+    └── globals.css
 ```
 
 ---

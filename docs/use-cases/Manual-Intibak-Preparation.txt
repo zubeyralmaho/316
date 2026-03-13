@@ -1,0 +1,124 @@
+@startuml
+title Manual Intibak Preparation (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "YGK Staff" as YGK
+participant "intibakPage : IntibakPreparationPage" as Page
+participant "intibakView : IntibakPreparationView" as View
+participant "intibakApiClient : IntibakApiClient" as ApiClient
+participant "workflowCtrl : WorkflowController" as Controller
+participant "workflowAppService : WorkflowApplicationService" as WorkflowAppService
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "documentRepo : DocumentRepository" as DocumentRepo
+participant "workflowRepo : WorkflowRepository" as WorkflowRepo
+participant "statusService : StatusApplicationService" as StatusService
+database "db : PostgreSQL" as DB
+
+== Step 1: Open Intibak Preparation Page ==
+YGK -> Page: 1. navigateToIntibakPreparation(applicationId)
+activate Page
+Page -> View: 1.1 renderIntibakWorkspace()
+activate View
+
+View -> ApiClient: 1.2 getApplicationAcademicDocuments(applicationId)
+activate ApiClient
+ApiClient -> Controller: 1.3 GET /workflows/{applicationId}/intibak-data
+activate Controller
+Controller -> WorkflowAppService: 1.4 getIntibakData(applicationId)
+activate WorkflowAppService
+
+WorkflowAppService -> AppRepo: 1.5 findById(applicationId)
+activate AppRepo
+AppRepo -> DB: 1.6 query application
+activate DB
+DB --> AppRepo: 1.7 application found
+deactivate DB
+AppRepo --> WorkflowAppService: 1.8 application
+deactivate AppRepo
+
+WorkflowAppService -> DocumentRepo: 1.9 findAcademicDocuments(applicationId)
+activate DocumentRepo
+DocumentRepo -> DB: 1.10 query transcript/course content documents
+activate DB
+DB --> DocumentRepo: 1.11 academic document metadata
+deactivate DB
+DocumentRepo --> WorkflowAppService: 1.12 academic document list
+deactivate DocumentRepo
+
+WorkflowAppService --> Controller: 1.13 IntibakDataResponse
+deactivate WorkflowAppService
+Controller --> ApiClient: 1.14 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 1.15 return academic data and target curriculum
+deactivate ApiClient
+View --> YGK: 1.16 display source courses and target curriculum
+
+== Step 2: Manual Course Matching ==
+YGK -> View: 2. manuallyMatchCourses(sourceCourse, targetCourse)
+View --> YGK: 2.1 show tentative equivalency row
+
+loop For each equivalency row
+    YGK -> View: 2.2 add/edit/delete equivalency row
+end
+
+== Step 3: Save Draft Intibak Table ==
+YGK -> View: 3. saveDraftIntibakTable(equivalencyRows)
+View -> ApiClient: 3.1 postSaveIntibakDraft(applicationId, equivalencyRows)
+activate ApiClient
+ApiClient -> Controller: 3.2 POST /workflows/{applicationId}/intibak/draft
+activate Controller
+Controller -> WorkflowAppService: 3.3 saveIntibakDraft(applicationId, equivalencyRows)
+activate WorkflowAppService
+WorkflowAppService -> WorkflowRepo: 3.4 saveIntibakDraft(applicationId, draftData)
+activate WorkflowRepo
+WorkflowRepo -> DB: 3.5 insert/update intibak draft
+activate DB
+DB --> WorkflowRepo: 3.6 save success
+deactivate DB
+WorkflowRepo --> WorkflowAppService: 3.7 draft saved
+deactivate WorkflowRepo
+WorkflowAppService --> Controller: 3.8 draft save response
+deactivate WorkflowAppService
+Controller --> ApiClient: 3.9 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 3.10 return success
+deactivate ApiClient
+View --> YGK: 3.11 display "Intibak draft saved"
+
+== Step 4: Finalize Intibak Table ==
+YGK -> View: 4. finalizeIntibakTable()
+View -> ApiClient: 4.1 postFinalizeIntibak(applicationId)
+activate ApiClient
+ApiClient -> Controller: 4.2 POST /workflows/{applicationId}/intibak/finalize
+activate Controller
+Controller -> WorkflowAppService: 4.3 finalizeIntibak(applicationId)
+activate WorkflowAppService
+
+WorkflowAppService -> WorkflowRepo: 4.4 markIntibakFinal(applicationId)
+activate WorkflowRepo
+WorkflowRepo -> DB: 4.5 update intibak state
+activate DB
+DB --> WorkflowRepo: 4.6 update success
+deactivate DB
+WorkflowRepo --> WorkflowAppService: 4.7 finalized
+deactivate WorkflowRepo
+
+WorkflowAppService -> StatusService: 4.8 updateStatus(applicationId, WAITING_FINAL_DECISION)
+activate StatusService
+StatusService -> DB: 4.9 update status/history
+activate DB
+DB --> StatusService: 4.10 update success
+deactivate DB
+StatusService --> WorkflowAppService: 4.11 status updated
+deactivate StatusService
+
+WorkflowAppService --> Controller: 4.12 finalization success
+deactivate WorkflowAppService
+Controller --> ApiClient: 4.13 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 4.14 return success
+deactivate ApiClient
+View --> YGK: 4.15 display "Intibak finalized and forwarded in workflow"
+
+deactivate View
+deactivate Page
+@enduml

@@ -1,0 +1,136 @@
+@startuml
+title Final Decision and Result Publishing
+
+actor "Dean's Office / OIDB Staff" as Staff
+participant "decisionPage : FinalDecisionPage" as Page
+participant "decisionView : FinalDecisionView" as View
+participant "resultApiClient : ResultApiClient" as ApiClient
+participant "workflowCtrl : WorkflowController" as Controller
+participant "workflowAppService : WorkflowApplicationService" as WorkflowAppService
+participant "evaluationRepo : EvaluationRepository" as EvaluationRepo
+participant "applicationRepo : ApplicationRepository" as ApplicationRepo
+participant "statusService : StatusApplicationService" as StatusService
+participant "notificationService : NotificationApplicationService" as NotificationService
+participant "ubysAdapter : UbysAdapter" as UBYS
+database "db : PostgreSQL" as DB
+
+== Step 1: Open Final Decision Page ==
+Staff -> Page: 1. navigateToFinalDecisionPage()
+activate Page
+Page -> View: 1.1 renderFinalDecisionPage()
+activate View
+
+View -> ApiClient: 1.2 getRankedApplications(term, department)
+activate ApiClient
+ApiClient -> Controller: 1.3 GET /results/ranked-applications
+activate Controller
+Controller -> WorkflowAppService: 1.4 getRankedApplications(term, department)
+activate WorkflowAppService
+WorkflowAppService -> EvaluationRepo: 1.5 findRankingResults(term, department)
+activate EvaluationRepo
+EvaluationRepo -> DB: 1.6 query ranked applications
+activate DB
+DB --> EvaluationRepo: 1.7 ranking list
+deactivate DB
+EvaluationRepo --> WorkflowAppService: 1.8 ranking results
+deactivate EvaluationRepo
+WorkflowAppService --> Controller: 1.9 RankedApplicationListResponse
+deactivate WorkflowAppService
+Controller --> ApiClient: 1.10 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 1.11 return ranked applications
+deactivate ApiClient
+View --> Staff: 1.12 display ranked candidate list
+
+== Step 2: Finalize Decisions ==
+Staff -> View: 2. submitFinalDecisions(accepted, waitlisted, rejected)
+View -> ApiClient: 2.1 postFinalizeResults(decisionPayload)
+activate ApiClient
+ApiClient -> Controller: 2.2 POST /results/finalize
+activate Controller
+Controller -> WorkflowAppService: 2.3 finalizeResults(decisionPayload)
+activate WorkflowAppService
+
+loop For each application decision
+    WorkflowAppService -> ApplicationRepo: 2.4 updateFinalDecision(applicationId, resultType)
+    activate ApplicationRepo
+    ApplicationRepo -> DB: 2.5 update application decision
+    activate DB
+    DB --> ApplicationRepo: 2.6 update success
+    deactivate DB
+    ApplicationRepo --> WorkflowAppService: 2.7 updated
+    deactivate ApplicationRepo
+
+    WorkflowAppService -> StatusService: 2.8 updateStatus(applicationId, finalVisibleStatus)
+    activate StatusService
+    StatusService -> DB: 2.9 insert/update status history
+    activate DB
+    DB --> StatusService: 2.10 update success
+    deactivate DB
+    StatusService --> WorkflowAppService: 2.11 status updated
+    deactivate StatusService
+
+    WorkflowAppService -> NotificationService: 2.12 createFinalResultNotification(applicationId, resultType)
+    activate NotificationService
+    NotificationService -> DB: 2.13 insert notification
+    activate DB
+    DB --> NotificationService: 2.14 insert success
+    deactivate DB
+    NotificationService --> WorkflowAppService: 2.15 notification created
+    deactivate NotificationService
+end
+
+== Step 3: Publish to UBYS ==
+WorkflowAppService -> UBYS: 3.1 publishFinalResults(resultPayload)
+activate UBYS
+UBYS --> WorkflowAppService: 3.2 publish success / ack
+deactivate UBYS
+
+WorkflowAppService --> Controller: 3.3 finalize success response
+deactivate WorkflowAppService
+Controller --> ApiClient: 3.4 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 3.5 return success
+deactivate ApiClient
+View --> Staff: 3.6 display "Final results published successfully"
+
+== Step 4: Student Views Final Result ==
+actor "Applicant Student" as Student
+participant "statusPage : ApplicationStatusPage" as StatusPage
+participant "statusView : ApplicationStatusView" as StatusView
+participant "statusApiClient : StatusApiClient" as StatusApiClient
+participant "statusCtrl : StatusController" as StatusCtrl
+participant "statusAppService : StatusApplicationService" as StatusAppService
+participant "statusRepo : StatusRepository" as StatusRepo
+
+Student -> StatusPage: 4. openApplicationStatus()
+activate StatusPage
+StatusPage -> StatusView: 4.1 renderStatusPage()
+activate StatusView
+StatusView -> StatusApiClient: 4.2 getMyApplicationStatus()
+activate StatusApiClient
+StatusApiClient -> StatusCtrl: 4.3 GET /statuses/me
+activate StatusCtrl
+StatusCtrl -> StatusAppService: 4.4 getCurrentApplicationStatus()
+activate StatusAppService
+StatusAppService -> StatusRepo: 4.5 findCurrentStatusByUser(userId)
+activate StatusRepo
+StatusRepo -> DB: 4.6 query final current status
+activate DB
+DB --> StatusRepo: 4.7 final status
+deactivate DB
+StatusRepo --> StatusAppService: 4.8 final status
+deactivate StatusRepo
+StatusAppService --> StatusCtrl: 4.9 ApplicationStatusResponse
+deactivate StatusAppService
+StatusCtrl --> StatusApiClient: 4.10 HTTP 200 OK
+deactivate StatusCtrl
+StatusApiClient --> StatusView: 4.11 return final result
+deactivate StatusApiClient
+StatusView --> Student: 4.12 display Accepted / Waitlisted / Rejected
+
+deactivate StatusView
+deactivate StatusPage
+deactivate View
+deactivate Page
+@enduml

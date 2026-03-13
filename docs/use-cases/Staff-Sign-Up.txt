@@ -1,0 +1,72 @@
+@startuml
+title Staff Sign Up (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Administrative Staff" as Staff
+participant "signUpPage : StaffSignUpPage" as Page
+participant "signUpView : StaffSignUpView" as View
+participant "authApiClient : AuthApiClient" as ApiClient
+participant "authCtrl : AuthController" as Controller
+participant "authAppService : AuthApplicationService" as AppService
+participant "authDomainService : AuthDomainService" as DomainService
+participant "userRepo : UserRepository" as UserRepo
+participant "emailService : EmailNotificationService" as EmailService
+database "db : PostgreSQL" as DB
+
+Staff -> Page: navigateToStaffSignUp()
+activate Page
+Page -> View: renderStaffRegistrationForm()
+activate View
+View --> Staff: display staff sign up form
+
+Staff -> View: submitRegistrationData(staffInfo)
+View -> ApiClient: postStaffRegister(staffInfo)
+activate ApiClient
+ApiClient -> Controller: POST /auth/staff/register
+activate Controller
+Controller -> AppService: registerStaff(staffInfo)
+activate AppService
+AppService -> DomainService: validateAndCreateStaff(staffInfo)
+activate DomainService
+DomainService -> UserRepo: existsByEmail(email)
+activate UserRepo
+UserRepo -> DB: query by email
+activate DB
+DB --> UserRepo: exists / not exists
+deactivate DB
+UserRepo --> DomainService: exists / not exists
+deactivate UserRepo
+
+alt [Email Already Exists]
+    DomainService --> AppService: throw EmailAlreadyExistsException
+    AppService --> Controller: error response
+    Controller --> ApiClient: HTTP 409 Conflict
+    ApiClient --> View: return error
+    View --> Staff: display "Email already in use"
+
+else [Normal Course]
+    DomainService -> UserRepo: save(staffUser)
+    activate UserRepo
+    UserRepo -> DB: insert staff user
+    activate DB
+    DB --> UserRepo: insert success
+    deactivate DB
+    UserRepo --> DomainService: saved user
+    deactivate UserRepo
+    DomainService -> EmailService: sendVerificationEmail(email)
+    activate EmailService
+    EmailService --> DomainService: email sent
+    deactivate EmailService
+    DomainService --> AppService: registrationSuccess
+    deactivate DomainService
+    AppService --> Controller: success response
+    deactivate AppService
+    Controller --> ApiClient: HTTP 201 Created
+    deactivate Controller
+    ApiClient --> View: return success
+    deactivate ApiClient
+    View --> Staff: display registration success message
+end
+
+deactivate View
+deactivate Page
+@enduml

@@ -12,10 +12,10 @@
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| React | 18.x | UI framework |
+| Next.js | 16.x | React Framework |
 | TypeScript | 5.x | Type-safe JavaScript |
-| Vite | 5.x | Build tool & dev server |
-| React Router | 6.x | Client-side routing |
+| React | 18.x | UI library |
+| Tailwind CSS | 3.x | Utility styling |
 
 ### 1.2 State Management
 
@@ -25,20 +25,23 @@
 | React Query | Server state, caching, sync |
 | React Hook Form | Form state management |
 
-### 1.3 UI Framework
+### 1.3 UI Framework & Styling
 
 | Technology | Purpose |
 |------------|---------|
-| Ant Design | Component library |
-| Tailwind CSS | Utility styling |
-| Framer Motion | Animations |
+| Shadcn UI | Core component architecture |
+| Radix UI | Unstyled, accessible primitives |
+| Tailwind CSS | Utility-first styling framework |
+| Framer Motion | Declarative animations |
 
 ### 1.4 Supporting Libraries
 
 | Library | Purpose |
 |---------|---------|
 | Axios | HTTP client |
-| Zod | Schema validation |
+| Zod | Schema validation & type inference |
+| Lucide React| Beautiful, consistent icons |
+| tailwind-merge & clsx | Dynamic class utilities |
 | dayjs | Date handling |
 | i18next | Internationalization |
 
@@ -48,11 +51,13 @@
 
 ```
 src/
-├── main.tsx                    # Application entry point
-├── App.tsx                     # Root component with providers
-├── vite-env.d.ts              # Vite type definitions
+├── app/                        # Next.js App Router
+│   ├── layout.tsx             # Root layout with providers
+│   ├── page.tsx               # Root page
+│   ├── (auth)/                # Auth group layout
+│   ├── (dashboard)/           # Dashboard group layout
 │
-├── api/                        # API layer
+├── api-client/                 # API client layer (Axios instances, API definitions)
 │   ├── client.ts              # Axios instance configuration
 │   ├── auth.api.ts            # Authentication endpoints
 │   ├── application.api.ts     # Application endpoints
@@ -83,7 +88,6 @@ src/
 ├── store/                      # Zustand stores
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Utility functions
-├── routes/                     # Routing configuration
 ├── constants/                  # Application constants
 ├── services/                   # Business logic services
 └── styles/                     # Global styles
@@ -141,12 +145,12 @@ src/
 ### 3.5 Route Protection Logic
 
 ```
-Route Access Rules:
+Route Access Rules (Next.js Middleware):
 ├── Public routes: No authentication required
-├── Student routes: role === 'STUDENT'
-├── Staff routes: role IN ['OIDB_STAFF', 'DEAN_STAFF', 'YGK_MEMBER', 'YDYO_STAFF']
-├── Admin routes: role === 'SYSTEM_ADMIN'
-└── 403 Forbidden: If role doesn't match
+├── Student routes (/student/*): role === 'STUDENT'
+├── Staff routes (/staff/*): role IN ['OIDB_STAFF', 'DEAN_STAFF', 'YGK_MEMBER', 'YDYO_STAFF']
+├── Admin routes (/admin/*): role === 'SYSTEM_ADMIN'
+└── Redirect to /login or 403: If role doesn't match
 ```
 
 ---
@@ -327,6 +331,8 @@ useUploadDocument()
 useReviewDocument()
 useTransferApplication()
 ```
+
+*Note: In Next.js, Server Actions can replace some of these mutations for simpler data fetching and form submissions.*
 
 **Caching Strategy:**
 | Query | Stale Time | Cache Time |

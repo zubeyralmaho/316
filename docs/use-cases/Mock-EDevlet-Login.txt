@@ -1,0 +1,129 @@
+@startuml
+title Mock e-Devlet Login (Class-based Sequence Diagram with Next.js Frontend)
+
+actor "Applicant Student" as Student
+participant "loginPage : LoginPage" as Page
+participant "loginView : LoginView" as View
+participant "authApiClient : AuthApiClient" as ApiClient
+participant "authCtrl : AuthController" as Controller
+participant "authAppService : AuthApplicationService" as AppService
+participant "edevletAuthService : EDevletAuthService" as EDevletAuthService
+participant "edevletAdapter : EDevletAdapter" as EDevletAdapter
+participant "userRepo : UserRepository" as UserRepo
+participant "jwtService : JwtService" as JwtService
+database "db : PostgreSQL" as DB
+cloud "e-Devlet / Mock" as EDevletMock
+participant "dashboardPage : StudentDashboardPage" as Dashboard
+
+== Step 1: Open Login Page ==
+Student -> Page: 1. navigateToLogin()
+activate Page
+Page -> View: 1.1 renderLoginOptions()
+activate View
+View --> Student: 1.2 display "Login with e-Devlet"
+deactivate View
+deactivate Page
+
+== Step 2: Start e-Devlet Login ==
+Student -> View: 2. clickLoginWithEDevlet()
+activate View
+View -> ApiClient: 2.1 startEDevletLogin()
+activate ApiClient
+ApiClient -> Controller: 2.2 GET /auth/edevlet/start
+activate Controller
+Controller -> AppService: 2.3 initiateEDevletLogin()
+activate AppService
+AppService -> EDevletAuthService: 2.4 buildAuthorizationRequest()
+activate EDevletAuthService
+EDevletAuthService -> EDevletAdapter: 2.5 createRedirectUrl()
+activate EDevletAdapter
+EDevletAdapter --> EDevletAuthService: 2.6 redirectUrl
+deactivate EDevletAdapter
+EDevletAuthService --> AppService: 2.7 redirectUrl
+deactivate EDevletAuthService
+AppService --> Controller: 2.8 redirect response
+deactivate AppService
+Controller --> ApiClient: 2.9 HTTP 302 / redirect URL
+deactivate Controller
+ApiClient --> View: 2.10 return redirect URL
+deactivate ApiClient
+View --> Student: 2.11 redirect to mock e-Devlet
+
+== Step 3: Mock e-Devlet Authentication ==
+Student -> EDevletMock: 3. authenticate(identityNumber, password)
+activate EDevletMock
+
+alt [Invalid Identity Verification]
+    EDevletMock --> Student: 3.1 authentication failed
+
+else [Successful Authentication]
+    EDevletMock --> Page: 3.2 redirect back with authorization code
+    deactivate EDevletMock
+
+    activate Page
+    Page -> View: 3.3 renderCallbackHandler()
+    activate View
+    View -> ApiClient: 3.4 exchangeAuthorizationCode(code)
+    activate ApiClient
+
+    ApiClient -> Controller: 3.5 POST /auth/edevlet/callback
+    activate Controller
+    Controller -> AppService: 3.6 handleEDevletCallback(code)
+    activate AppService
+
+    AppService -> EDevletAuthService: 3.7 fetchIdentityFromEDevlet(code)
+    activate EDevletAuthService
+    EDevletAuthService -> EDevletAdapter: 3.8 getIdentityInfo(code)
+    activate EDevletAdapter
+    EDevletAdapter -> EDevletMock: 3.9 validate code and fetch identity
+    activate EDevletMock
+    EDevletMock --> EDevletAdapter: 3.10 identity data
+    deactivate EDevletMock
+    EDevletAdapter --> EDevletAuthService: 3.11 identity info
+    deactivate EDevletAdapter
+    EDevletAuthService --> AppService: 3.12 verified identity
+    deactivate EDevletAuthService
+
+    == Step 4: Resolve User in Local System ==
+    AppService -> UserRepo: 4.1 findByEmailOrIdentity(identityInfo)
+    activate UserRepo
+    UserRepo -> DB: 4.2 query user
+    activate DB
+    DB --> UserRepo: 4.3 user / null
+    deactivate DB
+    UserRepo --> AppService: 4.4 user / null
+    deactivate UserRepo
+
+    alt [User Not Found]
+        AppService -> UserRepo: 4.5 createUserFromEDevlet(identityInfo)
+        activate UserRepo
+        UserRepo -> DB: 4.6 insert new user
+        activate DB
+        DB --> UserRepo: 4.7 insert success
+        deactivate DB
+        UserRepo --> AppService: 4.8 created user
+        deactivate UserRepo
+    end
+
+    == Step 5: Generate Local Auth Token ==
+    AppService -> JwtService: 5.1 generateToken(userId, STUDENT)
+    activate JwtService
+    JwtService --> AppService: 5.2 jwtToken
+    deactivate JwtService
+
+    AppService --> Controller: 5.3 AuthSuccess(jwtToken, userInfo)
+    deactivate AppService
+    Controller --> ApiClient: 5.4 HTTP 200 OK
+    deactivate Controller
+    ApiClient --> View: 5.5 return success(token, userInfo)
+    deactivate ApiClient
+
+    == Step 6: Redirect to Dashboard ==
+    View -> Dashboard: 6.1 navigateToDashboard()
+    activate Dashboard
+    Dashboard --> Student: 6.2 display Student Dashboard
+    deactivate Dashboard
+    deactivate View
+    deactivate Page
+end
+@enduml

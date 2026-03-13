@@ -1,0 +1,79 @@
+@startuml
+title Manage Applicant Dashboard / Status (Generic Staff Sequence Diagram with Next.js Frontend)
+
+actor "Administrative Staff" as Staff
+participant "dashboardPage : ApplicantDashboardPage" as Page
+participant "dashboardView : ApplicantDashboardView" as View
+participant "dashboardApiClient : DashboardApiClient" as ApiClient
+participant "userCtrl : UserController" as Controller
+participant "userAppService : UserApplicationService" as AppService
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "statusRepo : StatusRepository" as StatusRepo
+database "db : PostgreSQL" as DB
+
+== Step 1: Open Dashboard ==
+Staff -> Page: 1. navigateToApplicantDashboard()
+activate Page
+Page -> View: 1.1 renderDashboard()
+activate View
+
+View -> ApiClient: 1.2 getAssignedApplications(filters, pagination)
+activate ApiClient
+ApiClient -> Controller: 1.3 GET /staff/applications
+activate Controller
+Controller -> AppService: 1.4 getAssignedApplications(filters, pagination)
+activate AppService
+
+AppService -> AppRepo: 1.5 findApplicationsByAssignedUnit(filters, pagination)
+activate AppRepo
+AppRepo -> DB: 1.6 query applications
+activate DB
+DB --> AppRepo: 1.7 application list
+deactivate DB
+AppRepo --> AppService: 1.8 applications
+deactivate AppRepo
+
+AppService -> StatusRepo: 1.9 findCurrentStatuses(applicationIds)
+activate StatusRepo
+StatusRepo -> DB: 1.10 query statuses
+activate DB
+DB --> StatusRepo: 1.11 status list
+deactivate DB
+StatusRepo --> AppService: 1.12 current statuses
+deactivate StatusRepo
+
+AppService --> Controller: 1.13 ApplicantDashboardResponse
+deactivate AppService
+Controller --> ApiClient: 1.14 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 1.15 return dashboard data
+deactivate ApiClient
+View --> Staff: 1.16 display waitlist/all applicants tabs
+
+== Step 2: Open Applicant Detail ==
+Staff -> View: 2. selectApplicant(applicationId)
+View -> ApiClient: 2.1 getApplicantDetail(applicationId)
+activate ApiClient
+ApiClient -> Controller: 2.2 GET /staff/applications/{applicationId}
+activate Controller
+Controller -> AppService: 2.3 getApplicantDetail(applicationId)
+activate AppService
+AppService -> AppRepo: 2.4 findById(applicationId)
+activate AppRepo
+AppRepo -> DB: 2.5 query application detail
+activate DB
+DB --> AppRepo: 2.6 application detail
+deactivate DB
+AppRepo --> AppService: 2.7 application detail
+deactivate AppRepo
+AppService --> Controller: 2.8 ApplicantDetailResponse
+deactivate AppService
+Controller --> ApiClient: 2.9 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 2.10 return detail
+deactivate ApiClient
+View --> Staff: 2.11 display applicant detail and possible actions
+
+deactivate View
+deactivate Page
+@enduml

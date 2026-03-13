@@ -1,0 +1,161 @@
+@startuml
+title Evaluation Flow: Eligibility Check, Score Calculation, and Ranking
+
+actor "System Admin / Staff Trigger" as Staff
+participant "evaluationPage : EvaluationPage" as Page
+participant "evaluationView : EvaluationView" as View
+participant "evaluationApiClient : EvaluationApiClient" as ApiClient
+participant "evaluationCtrl : EvaluationController" as Controller
+participant "evaluationAppService : EvaluationApplicationService" as AppService
+participant "evaluationDomainService : EvaluationDomainService" as DomainService
+participant "eligibilityRuleService : EligibilityRuleService" as EligibilityRules
+participant "scoreCalculator : ScoreCalculator" as ScoreCalculator
+participant "rankingService : RankingService" as RankingService
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "evaluationRepo : EvaluationRepository" as EvaluationRepo
+participant "statusService : StatusApplicationService" as StatusService
+participant "yoksisAdapter : YoksisAdapter" as YOKSIS
+participant "osymAdapter : OsymAdapter" as OSYM
+database "db : PostgreSQL" as DB
+
+== Step 1: Trigger Evaluation Batch ==
+Staff -> Page: 1. navigateToEvaluationPage()
+activate Page
+Page -> View: 1.1 renderEvaluationPage()
+activate View
+Staff -> View: 1.2 startEvaluation(term, department)
+
+View -> ApiClient: 1.3 postRunEvaluation(term, department)
+activate ApiClient
+ApiClient -> Controller: 1.4 POST /evaluations/run
+activate Controller
+Controller -> AppService: 1.5 runEvaluation(term, department)
+activate AppService
+
+== Step 2: Load Candidate Applications ==
+AppService -> AppRepo: 2.1 findSubmittedApplications(term, department)
+activate AppRepo
+AppRepo -> DB: 2.2 query eligible candidate pool
+activate DB
+DB --> AppRepo: 2.3 application list
+deactivate DB
+AppRepo --> AppService: 2.4 applications
+deactivate AppRepo
+
+loop For each application
+    AppService -> DomainService: 2.5 evaluateApplication(application)
+    activate DomainService
+
+    == Step 3: External Verification ==
+    DomainService -> YOKSIS: 3.1 getAcademicData(studentId)
+    activate YOKSIS
+    YOKSIS --> DomainService: 3.2 GPA / academic verification
+    deactivate YOKSIS
+
+    DomainService -> OSYM: 3.3 getExamResult(studentId)
+    activate OSYM
+    OSYM --> DomainService: 3.4 YKS score / ranking
+    deactivate OSYM
+
+    == Step 4: Eligibility Check ==
+    DomainService -> EligibilityRules: 4.1 checkEligibility(application, academicData, examData)
+    activate EligibilityRules
+    EligibilityRules --> DomainService: 4.2 EligibilityResult
+    deactivate EligibilityRules
+
+    alt [Application is Ineligible]
+        DomainService -> EvaluationRepo: 4.3 saveEligibilityResult(applicationId, ineligible)
+        activate EvaluationRepo
+        EvaluationRepo -> DB: 4.4 insert eligibility result
+        activate DB
+        DB --> EvaluationRepo: 4.5 insert success
+        deactivate DB
+        EvaluationRepo --> DomainService: 4.6 saved
+        deactivate EvaluationRepo
+
+        DomainService -> StatusService: 4.7 updateStatus(applicationId, REJECTED)
+        activate StatusService
+        StatusService -> DB: 4.8 update status/history
+        activate DB
+        DB --> StatusService: 4.9 update success
+        deactivate DB
+        StatusService --> DomainService: 4.10 status updated
+        deactivate StatusService
+
+    else [Application is Eligible]
+        == Step 5: Score Calculation ==
+        DomainService -> ScoreCalculator: 5.1 calculateTransferScore(application, academicData, examData)
+        activate ScoreCalculator
+        ScoreCalculator --> DomainService: 5.2 ScoreResult
+        deactivate ScoreCalculator
+
+        DomainService -> EvaluationRepo: 5.3 saveEligibilityAndScore(applicationId, eligible, score)
+        activate EvaluationRepo
+        EvaluationRepo -> DB: 5.4 insert evaluation data
+        activate DB
+        DB --> EvaluationRepo: 5.5 insert success
+        deactivate DB
+        EvaluationRepo --> DomainService: 5.6 saved
+        deactivate EvaluationRepo
+
+        DomainService -> StatusService: 5.7 updateStatus(applicationId, UNDER_YGK_REVIEW)
+        activate StatusService
+        StatusService -> DB: 5.8 update status/history
+        activate DB
+        DB --> StatusService: 5.9 update success
+        deactivate DB
+        StatusService --> DomainService: 5.10 status updated
+        deactivate StatusService
+    end
+
+    DomainService --> AppService: 5.11 evaluation completed
+    deactivate DomainService
+end
+
+== Step 6: Ranking Eligible Candidates ==
+AppService -> EvaluationRepo: 6.1 findEligibleApplications(term, department)
+activate EvaluationRepo
+EvaluationRepo -> DB: 6.2 query eligible applications with scores
+activate DB
+DB --> EvaluationRepo: 6.3 eligible scored applications
+deactivate DB
+EvaluationRepo --> AppService: 6.4 eligible list
+deactivate EvaluationRepo
+
+AppService -> RankingService: 6.5 rankCandidates(eligibleList, quotas)
+activate RankingService
+RankingService --> AppService: 6.6 RankingResults
+deactivate RankingService
+
+AppService -> EvaluationRepo: 6.7 saveRankingResults(rankingResults)
+activate EvaluationRepo
+EvaluationRepo -> DB: 6.8 insert ranking results
+activate DB
+DB --> EvaluationRepo: 6.9 insert success
+deactivate DB
+EvaluationRepo --> AppService: 6.10 saved
+deactivate EvaluationRepo
+
+== Step 7: Update Final Ranking Status ==
+loop For each ranked application
+    AppService -> StatusService: 7.1 updateStatus(applicationId, WAITING_FINAL_DECISION)
+    activate StatusService
+    StatusService -> DB: 7.2 update status/history
+    activate DB
+    DB --> StatusService: 7.3 update success
+    deactivate DB
+    StatusService --> AppService: 7.4 status updated
+    deactivate StatusService
+end
+
+AppService --> Controller: 7.5 EvaluationBatchResponse
+deactivate AppService
+Controller --> ApiClient: 7.6 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 7.7 return success summary
+deactivate ApiClient
+View --> Staff: 7.8 display eligibility, score, and ranking results
+
+deactivate View
+deactivate Page
+@enduml

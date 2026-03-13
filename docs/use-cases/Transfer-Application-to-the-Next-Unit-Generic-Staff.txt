@@ -1,0 +1,157 @@
+@startuml
+title Transfer Application to the Next Unit (Generic Staff Sequence Diagram with Next.js Frontend)
+
+actor "Administrative Staff" as Staff
+participant "workflowPage : ApplicantWorkflowPage" as Page
+participant "workflowView : ApplicantWorkflowView" as View
+participant "workflowApiClient : WorkflowApiClient" as ApiClient
+participant "workflowCtrl : WorkflowController" as Controller
+participant "workflowAppService : WorkflowApplicationService" as AppService
+participant "workflowDomainService : WorkflowDomainService" as DomainService
+participant "stateMachineService : StateMachineService" as StateMachine
+participant "applicationRepo : ApplicationRepository" as AppRepo
+participant "workflowRepo : WorkflowRepository" as WorkflowRepo
+participant "statusService : StatusApplicationService" as StatusService
+participant "notificationService : NotificationApplicationService" as NotificationService
+database "db : PostgreSQL" as DB
+
+== Step 1: Open Workflow / Transfer Page ==
+Staff -> Page: 1. navigateToWorkflow(applicationId)
+activate Page
+Page -> View: 1.1 renderWorkflowPage()
+activate View
+
+View -> ApiClient: 1.2 getWorkflowDetails(applicationId)
+activate ApiClient
+ApiClient -> Controller: 1.3 GET /workflows/{applicationId}
+activate Controller
+Controller -> AppService: 1.4 getWorkflowDetails(applicationId)
+activate AppService
+AppService -> AppRepo: 1.5 findById(applicationId)
+activate AppRepo
+AppRepo -> DB: 1.6 query application
+activate DB
+DB --> AppRepo: 1.7 application found
+deactivate DB
+AppRepo --> AppService: 1.8 application
+deactivate AppRepo
+
+AppService -> WorkflowRepo: 1.9 findWorkflowHistory(applicationId)
+activate WorkflowRepo
+WorkflowRepo -> DB: 1.10 query workflow history
+activate DB
+DB --> WorkflowRepo: 1.11 workflow history
+deactivate DB
+WorkflowRepo --> AppService: 1.12 history list
+deactivate WorkflowRepo
+
+AppService --> Controller: 1.13 WorkflowDetailsResponse
+deactivate AppService
+Controller --> ApiClient: 1.14 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 1.15 return workflow details
+deactivate ApiClient
+View --> Staff: 1.16 display current unit and available transition options
+
+== Step 2: Transfer Decision ==
+Staff -> View: 2. clickTransferToNextUnit(targetUnit, note)
+View -> ApiClient: 2.1 postTransfer(applicationId, targetUnit, note)
+activate ApiClient
+ApiClient -> Controller: 2.2 POST /workflows/{applicationId}/transfer
+activate Controller
+Controller -> AppService: 2.3 transferToNextUnit(applicationId, targetUnit, note)
+activate AppService
+
+AppService -> DomainService: 2.4 validateTransfer(applicationId, targetUnit)
+activate DomainService
+
+DomainService -> AppRepo: 2.5 findById(applicationId)
+activate AppRepo
+AppRepo -> DB: 2.6 query application
+activate DB
+DB --> AppRepo: 2.7 application found
+deactivate DB
+AppRepo --> DomainService: 2.8 application
+deactivate AppRepo
+
+DomainService -> StateMachine: 2.9 resolveNextState(currentUnit, targetUnit)
+activate StateMachine
+
+alt [EX.1 Workflow Definition Error]
+    StateMachine --> DomainService: 2.10 invalid transition
+    deactivate StateMachine
+    DomainService --> AppService: 2.11 throw WorkflowDefinitionException
+    AppService --> Controller: 2.12 error response
+    Controller --> ApiClient: 2.13 HTTP 400 Bad Request
+    ApiClient --> View: 2.14 return workflow configuration error
+    View --> Staff: 2.15 display "Workflow configuration error: next step undefined"
+
+else [Valid Transition]
+    StateMachine --> DomainService: 2.16 next state resolved
+    deactivate StateMachine
+
+    alt [EX.2 Incomplete Step]
+        DomainService --> AppService: 2.17 throw IncompleteStepException
+        AppService --> Controller: 2.18 error response
+        Controller --> ApiClient: 2.19 HTTP 409 Conflict
+        ApiClient --> View: 2.20 return incomplete step error
+        View --> Staff: 2.21 display "Please complete your evaluation before transferring the application"
+
+    else [EX.3 Next Unit Not Available]
+        DomainService --> AppService: 2.22 throw UnitUnavailableException
+        AppService --> Controller: 2.23 error response
+        Controller --> ApiClient: 2.24 HTTP 503 Service Unavailable
+        ApiClient --> View: 2.25 return unit unavailable error
+        View --> Staff: 2.26 display "The next unit is currently unavailable. Please try again later"
+
+    else [Normal Course]
+        DomainService -> WorkflowRepo: 2.27 saveWorkflowStep(applicationId, currentUnit, targetUnit, note)
+        activate WorkflowRepo
+        WorkflowRepo -> DB: 2.28 insert workflow step
+        activate DB
+        DB --> WorkflowRepo: 2.29 insert success
+        deactivate DB
+        WorkflowRepo --> DomainService: 2.30 workflow step saved
+        deactivate WorkflowRepo
+
+        DomainService --> AppService: 2.31 transfer validated
+        deactivate DomainService
+
+        AppService -> StatusService: 2.32 updateStatus(applicationId, mappedVisibleStatus)
+        activate StatusService
+        StatusService -> DB: 2.33 insert/update status history
+        activate DB
+        DB --> StatusService: 2.34 update success
+        deactivate DB
+        StatusService --> AppService: 2.35 status updated
+        deactivate StatusService
+
+        AppService -> NotificationService: 2.36 createInfoNotification(applicationId, targetUnit)
+        activate NotificationService
+        NotificationService -> DB: 2.37 insert notification
+        activate DB
+        DB --> NotificationService: 2.38 insert success
+        deactivate DB
+        NotificationService --> AppService: 2.39 notification created
+        deactivate NotificationService
+
+        AppService --> Controller: 2.40 transfer success response
+        deactivate AppService
+        Controller --> ApiClient: 2.41 HTTP 200 OK
+        deactivate Controller
+        ApiClient --> View: 2.42 return success
+        deactivate ApiClient
+        View --> Staff: 2.43 display "Application transferred successfully"
+    end
+end
+
+== Optional Alternative: Manual Selection of Target Unit ==
+opt [AC.1 Multiple possible branches]
+    View --> Staff: AC1.1 display available target units
+    Staff -> View: AC1.2 select target unit manually
+    View -> ApiClient: AC1.3 resend transfer request with selected unit
+end
+
+deactivate View
+deactivate Page
+@enduml

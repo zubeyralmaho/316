@@ -1,0 +1,101 @@
+--- docs/files/08_FRONTEND_ARCHITECTURE.md
++++ docs/files/08_FRONTEND_ARCHITECTURE.md
+@@ -380,24 +380,31 @@
+ 
+ ### 5.2 Frontend Directory Structure
+ 
+ ```
+ src/
+-├── main.tsx                             # Application entry point
+-├── App.tsx                              # Root component
+-├── vite-env.d.ts                        # Vite types
+-│
+-├── api/                                 # API layer
+-│   ├── client.ts                        # Axios instance
+-│   ├── auth.api.ts
+-│   ├── application.api.ts
+-│   ├── document.api.ts
+-│   ├── evaluation.api.ts
+-│   ├── notification.api.ts
+-│   └── admin.api.ts
+-│
++├── app/                                 # Next.js App Router
++│   ├── layout.tsx                       # Root layout
++│   ├── page.tsx                         # Landing page
++│   ├── globals.css                      # Global styles
++│   │
++│   ├── (auth)/                          # Route group for auth
++│   │   ├── login/page.tsx
++│   │   ├── register/page.tsx
++│   │   └── reset-password/page.tsx
++│   │
++│   ├── (dashboard)/                     # Route group for dashboard layouts
++│       ├── student/
++│       │   ├── layout.tsx
++│       │   ├── page.tsx                 # Student dashboard
++│       │   ├── applications/page.tsx
++│       │   └── documents/page.tsx
++│       │
++│       ├── staff/
++│       │   ├── layout.tsx
++│       │   ├── page.tsx
++│       │   ├── applications/page.tsx
++│       │   └── intibak/page.tsx
++│       │
++│       └── admin/
++│           ├── layout.tsx
++│           ├── page.tsx
++│           ├── users/page.tsx
++│           └── settings/page.tsx
++│
+ ├── components/                          # Reusable components
+ │   ├── common/
+@@ -440,29 +447,6 @@
+ │       ├── NotificationList/
+ │       └── NotificationItem/
+ │
+-├── pages/                               # Page components
+-│   ├── auth/
+-│   │   ├── LoginPage.tsx
+-│   │   ├── RegisterPage.tsx
+-│   │   └── ResetPasswordPage.tsx
+-│   │
+-│   ├── student/
+-│   │   ├── DashboardPage.tsx
+-│   │   ├── NewApplicationPage.tsx
+-│   │   ├── ApplicationStatusPage.tsx
+-│   │   └── DocumentsPage.tsx
+-│   │
+-│   ├── staff/
+-│   │   ├── DashboardPage.tsx
+-│   │   ├── ApplicationListPage.tsx
+-│   │   ├── ApplicationDetailPage.tsx
+-│   │   ├── DocumentReviewPage.tsx
+-│   │   └── IntibakPage.tsx
+-│   │
+-│   ├── admin/
+-│   │   ├── DashboardPage.tsx
+-│   │   ├── UsersPage.tsx
+-│   │   ├── DepartmentsPage.tsx
+-│   │   ├── ReportsPage.tsx
+-│   │   └── SettingsPage.tsx
+-│   │
+-│   └── error/
+-│       ├── NotFoundPage.tsx
+-│       └── ErrorPage.tsx
+-│
+ ├── hooks/                               # Custom hooks
+ │   ├── useAuth.ts
+@@ -498,11 +482,6 @@
+ │   ├── storage.ts
+ │   └── helpers.ts
+ │
+-├── routes/                              # Routing
+-│   ├── index.tsx
+-│   ├── PrivateRoute.tsx
+-│   ├── RoleRoute.tsx
+-│   └── routes.config.ts
+-│
+ └── styles/                              # Global styles
+-    ├── global.css
+     ├── variables.css

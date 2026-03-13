@@ -1,0 +1,112 @@
+@startuml
+title Notification Flow: Action Required and Final Result
+
+actor "Administrative Staff / System Trigger" as Trigger
+participant "notificationPage : NotificationCenterPage" as Page
+participant "notificationView : NotificationCenterView" as View
+participant "notificationApiClient : NotificationApiClient" as ApiClient
+participant "notificationCtrl : NotificationController" as Controller
+participant "notificationAppService : NotificationApplicationService" as AppService
+participant "notificationDomainService : NotificationDomainService" as DomainService
+participant "emailService : EmailNotificationService" as EmailService
+participant "templateService : NotificationTemplateService" as TemplateService
+participant "statusService : StatusApplicationService" as StatusService
+participant "notificationRepo : NotificationRepository" as NotificationRepo
+database "db : PostgreSQL" as DB
+cloud "mail : Email Provider" as MAIL
+
+== Step 1: Trigger Notification ==
+Trigger -> StatusService: 1. statusChanged(applicationId, notificationType)
+activate StatusService
+StatusService -> AppService: 1.1 createNotification(applicationId, notificationType)
+activate AppService
+
+AppService -> DomainService: 1.2 prepareNotification(applicationId, notificationType)
+activate DomainService
+DomainService -> TemplateService: 1.3 resolveTemplate(notificationType)
+activate TemplateService
+TemplateService --> DomainService: 1.4 title + message template
+deactivate TemplateService
+
+DomainService --> AppService: 1.5 NotificationDraft
+deactivate DomainService
+
+AppService -> NotificationRepo: 1.6 saveNotification(notification)
+activate NotificationRepo
+NotificationRepo -> DB: 1.7 insert notification record
+activate DB
+DB --> NotificationRepo: 1.8 insert success
+deactivate DB
+NotificationRepo --> AppService: 1.9 notification saved
+deactivate NotificationRepo
+
+AppService -> EmailService: 1.10 sendNotificationEmail(recipient, title, message)
+activate EmailService
+EmailService -> MAIL: 1.11 send email
+activate MAIL
+MAIL --> EmailService: 1.12 accepted / delivered
+deactivate MAIL
+EmailService --> AppService: 1.13 email result
+deactivate EmailService
+
+AppService --> StatusService: 1.14 notification created
+deactivate AppService
+StatusService --> Trigger: 1.15 notification flow completed
+deactivate StatusService
+
+== Step 2: Student Opens Notification Center ==
+actor "Applicant Student" as Student
+Student -> Page: 2. navigateToNotifications()
+activate Page
+Page -> View: 2.1 renderNotificationCenter()
+activate View
+
+View -> ApiClient: 2.2 getMyNotifications()
+activate ApiClient
+ApiClient -> Controller: 2.3 GET /notifications/me
+activate Controller
+Controller -> AppService: 2.4 getNotificationsForCurrentUser()
+activate AppService
+AppService -> NotificationRepo: 2.5 findNotificationsByUser(userId)
+activate NotificationRepo
+NotificationRepo -> DB: 2.6 query notifications
+activate DB
+DB --> NotificationRepo: 2.7 notification list
+deactivate DB
+NotificationRepo --> AppService: 2.8 notifications
+deactivate NotificationRepo
+AppService --> Controller: 2.9 NotificationListResponse
+deactivate AppService
+Controller --> ApiClient: 2.10 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 2.11 return notifications
+deactivate ApiClient
+View --> Student: 2.12 display in-app notifications
+
+== Step 3: Mark Notification as Read ==
+Student -> View: 3. openNotification(notificationId)
+View -> ApiClient: 3.1 markAsRead(notificationId)
+activate ApiClient
+ApiClient -> Controller: 3.2 PATCH /notifications/{notificationId}/read
+activate Controller
+Controller -> AppService: 3.3 markNotificationAsRead(notificationId)
+activate AppService
+AppService -> NotificationRepo: 3.4 updateReadStatus(notificationId, true)
+activate NotificationRepo
+NotificationRepo -> DB: 3.5 update notification read flag
+activate DB
+DB --> NotificationRepo: 3.6 update success
+deactivate DB
+NotificationRepo --> AppService: 3.7 updated
+deactivate NotificationRepo
+AppService --> Controller: 3.8 success response
+deactivate AppService
+Controller --> ApiClient: 3.9 HTTP 200 OK
+deactivate Controller
+ApiClient --> View: 3.10 return success
+deactivate ApiClient
+View --> Student: 3.11 display notification detail
+
+deactivate View
+deactivate Page
+@enduml
